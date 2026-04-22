@@ -1,20 +1,30 @@
-import mongoose from "mongoose";
+import mongoose from 'mongoose';
 
-const QuestionSchema = new mongoose.Schema ({
-    question : {
-        type : String,
-        require : true 
+const questionSchema = new mongoose.Schema({
+    content: {
+        type: String,
+        required: [true, 'Vui lòng nhập nội dung câu hỏi']
     },
-    options : {
-        type : [String],
-        require : true
+    options: {
+        type: [String],
+        required: [true, 'Vui lòng cung cấp các lựa chọn đáp án'],
+        validate: [arrayLimit, 'Cần ít nhất 2 lựa chọn']
     },
-    score : {
-        type : Number,
-        require : true
-        default : 1
+    correct_answer: {
+        type: String,
+        required: [true, 'Vui lòng nhập đáp án đúng']
     },
-    creator_Id : { type : mongoose.Schema.Types.ObjectId, ref : 'User' }
-}, {timestamps : true}) 
+    points: {
+        type: Number,
+        required: true,
+        default: 1
+    }
+}, { timestamps: true });
 
-export default mongoose.model('Question', QuestionSchema)
+// Hàm validate
+function arrayLimit(val) {
+    return val.length >= 2;
+}
+
+const Question = mongoose.model('Question', questionSchema);
+export default Question;
