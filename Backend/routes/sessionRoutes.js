@@ -21,6 +21,6 @@ router.post('/:sessionId/submit', protect, authorize('student'), submitSession);
 
 router.route('/:id')
     .get(protect, getSessionById)
-    .delete(protect, authorize('teacher'), deleteSession);
+    .delete(protect, authorize('teacher','admin'), deleteSession);
 
 export default router;
