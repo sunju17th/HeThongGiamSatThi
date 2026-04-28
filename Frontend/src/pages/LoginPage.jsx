@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 const LoginPage = () => {
@@ -110,7 +110,8 @@ const LoginPage = () => {
             marginBottom: '20px',
             fontSize: '14px',
             border: '1px solid #feb2b2'
-        }
+        },
+        linkText: { marginTop: '20px', fontSize: '14px', color: '#666' }
     };
 
     return (
@@ -154,6 +155,10 @@ const LoginPage = () => {
                         {isLoading ? 'Đang xử lý...' : 'Đăng Nhập'}
                     </button>
                 </form>
+                
+                <div style={styles.linkText}>
+                    Chưa có tài khoản? <Link to="/register" style={{ color: '#667eea', fontWeight: '600', textDecoration: 'none' }}>Đăng ký ngay</Link>
+                </div>
             </div>
         </div>
     );
