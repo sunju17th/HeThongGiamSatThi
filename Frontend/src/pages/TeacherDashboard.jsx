@@ -10,9 +10,14 @@ const TeacherDashboard = () => {
     const [exams, setExams] = useState([]);
     const [loading, setLoading] = useState(true);
     
-    // State cho Modal chi tiết
+    // State cho Modal chi tiết đề
     const [selectedExamDetails, setSelectedExamDetails] = useState(null);
     const [loadingDetails, setLoadingDetails] = useState(false);
+
+    // State cho Modal gán sinh viên
+    const [assignExamId, setAssignExamId] = useState(null);
+    const [studentsList, setStudentsList] = useState([]);
+    const [loadingStudents, setLoadingStudents] = useState(false);
 
     useEffect(() => {
         const fetchExams = async () => {
@@ -47,6 +52,33 @@ const TeacherDashboard = () => {
     };
 
     const closeModal = () => setSelectedExamDetails(null);
+    const closeAssignModal = () => setAssignExamId(null);
+
+    const handleOpenAssign = async (examId) => {
+        setAssignExamId(examId);
+        setLoadingStudents(true);
+        try {
+            const response = await api.get('/users');
+            // Chỉ lấy những user là student
+            const students = response.data.filter(u => u.role === 'student');
+            setStudentsList(students);
+        } catch (error) {
+            console.error("Lỗi lấy danh sách sinh viên:", error);
+            alert("Không thể tải danh sách sinh viên!");
+        } finally {
+            setLoadingStudents(false);
+        }
+    };
+
+    const handleAssignStudent = async (studentId) => {
+        try {
+            await api.post(`/exams/${assignExamId}/assign`, { studentId });
+            alert('Đã gán sinh viên vào kỳ thi thành công!');
+        } catch (error) {
+            console.error("Lỗi gán sinh viên:", error);
+            alert(error.response?.data?.message || "Lỗi khi gán sinh viên");
+        }
+    };
 
     // --- Modern CSS ---
     const styles = {
@@ -182,7 +214,9 @@ const TeacherDashboard = () => {
         modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
         modalContent: { background: 'white', width: '100%', maxWidth: '800px', borderRadius: '12px', padding: '30px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 10px 25px rgba(0,0,0,0.2)' },
         questionBox: { background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '15px', marginBottom: '15px' },
-        correctOption: { color: '#38a169', fontWeight: 'bold' }
+        correctOption: { color: '#38a169', fontWeight: 'bold' },
+        studentRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', borderBottom: '1px solid #edf2f7' },
+        assignBtn: { padding: '6px 12px', background: '#38a169', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }
     };
 
     return (
@@ -258,11 +292,20 @@ const TeacherDashboard = () => {
                                         Kết thúc: <strong style={styles.strong}>{exam.end_time ? new Date(exam.end_time).toLocaleString('vi-VN') : 'N/A'}</strong>
                                     </p>
                                 </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '15px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '15px', flexWrap: 'wrap', gap: '10px' }}>
                                     <div style={styles.badge}>
                                         {exam.questions?.length || 0} Câu hỏi
                                     </div>
-                                    <div style={{ display: 'flex', gap: '10px' }}>
+                                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                        <button 
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleOpenAssign(exam._id);
+                                            }}
+                                            style={{ padding: '6px 10px', background: '#f0fff4', color: '#2f855a', border: '1px solid #c6f6d5', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}
+                                        >
+                                            + Thêm SV
+                                        </button>
                                         <button 
                                             onClick={(e) => {
                                                 e.stopPropagation();
@@ -335,6 +378,43 @@ const TeacherDashboard = () => {
                             )}
 
                             <button onClick={closeModal} style={{ width: '100%', padding: '12px', background: '#edf2f7', color: '#4a5568', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '16px', fontWeight: 'bold', marginTop: '20px' }}>Đóng</button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Modal Gán Sinh Viên */}
+                {assignExamId && (
+                    <div style={styles.modalOverlay} onClick={closeAssignModal}>
+                        <div style={{...styles.modalContent, maxWidth: '500px'}} onClick={e => e.stopPropagation()}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '2px solid #edf2f7', paddingBottom: '15px' }}>
+                                <h3 style={{ margin: 0, fontSize: '20px', color: '#2d3748' }}>Thêm sinh viên vào kỳ thi</h3>
+                                <button onClick={closeAssignModal} style={{ background: 'none', border: 'none', fontSize: '28px', cursor: 'pointer', color: '#a0aec0' }}>&times;</button>
+                            </div>
+
+                            {loadingStudents ? (
+                                <p style={{ textAlign: 'center', color: '#718096' }}>Đang tải danh sách sinh viên...</p>
+                            ) : studentsList.length === 0 ? (
+                                <p style={{ textAlign: 'center', color: '#718096' }}>Không có sinh viên nào trong hệ thống.</p>
+                            ) : (
+                                <div>
+                                    {studentsList.map(student => (
+                                        <div key={student._id} style={styles.studentRow}>
+                                            <div>
+                                                <strong>{student.full_name}</strong>
+                                                <div style={{ fontSize: '13px', color: '#718096' }}>{student.username}</div>
+                                            </div>
+                                            <button 
+                                                style={styles.assignBtn}
+                                                onClick={() => handleAssignStudent(student._id)}
+                                            >
+                                                Gán vào thi
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            <button onClick={closeAssignModal} style={{ width: '100%', padding: '12px', background: '#edf2f7', color: '#4a5568', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '16px', fontWeight: 'bold', marginTop: '20px' }}>Đóng</button>
                         </div>
                     </div>
                 )}
