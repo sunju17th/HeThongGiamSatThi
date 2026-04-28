@@ -8,6 +8,7 @@ import ExamResults from './pages/ExamResults';
 import StudentPortal from './pages/StudentPortal';
 import StudentHistory from './pages/StudentHistory';
 import HomePage from './pages/HomePage';
+import RegisterPage from './pages/RegisterPage';
 
 import ExamRoom from './pages/ExamRoom';
 
@@ -35,6 +36,7 @@ function App() {
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
             
             {/* Áp dụng bảo vệ cho trang Teacher */}
             <Route 
