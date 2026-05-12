@@ -89,7 +89,7 @@ export const submitSession = async (req, res) => {
         if (!session) return res.status(404).json({ message: 'Phiên thi không tồn tại' });
 
         if (session.student_id.toString() !== req.user._id.toString()) {
-            return res.status(403).json({ message: 'Not authorized' });
+            return res.status(403).json({ message: 'Bạn không có quyền nộp bài thi này' });
         }
 
         if (session.status !== 'ongoing') {
