@@ -54,14 +54,21 @@ const TeacherDashboard = () => {
     const closeModal = () => setSelectedExamDetails(null);
     const closeAssignModal = () => setAssignExamId(null);
 
-    const handleOpenAssign = async (examId) => {
-        setAssignExamId(examId);
+    const handleOpenAssign = async (exam) => {
+        setAssignExamId(exam._id);
         setLoadingStudents(true);
         try {
             const response = await api.get('/users');
             // Chỉ lấy những user là student
             const students = response.data.filter(u => u.role === 'student');
-            setStudentsList(students);
+            
+            // Đánh dấu những học sinh đã có trong danh sách
+            const studentsWithStatus = students.map(s => ({
+                ...s,
+                isAssigned: exam.allowed_students?.includes(s._id)
+            }));
+            
+            setStudentsList(studentsWithStatus);
         } catch (error) {
             console.error("Lỗi lấy danh sách sinh viên:", error);
             alert("Không thể tải danh sách sinh viên!");
@@ -74,6 +81,20 @@ const TeacherDashboard = () => {
         try {
             await api.post(`/exams/${assignExamId}/assign`, { studentId });
             alert('Đã gán sinh viên vào kỳ thi thành công!');
+            
+            // Cập nhật lại UI cục bộ để hiển thị "Đã gán"
+            setStudentsList(prev => prev.map(s => 
+                s._id === studentId ? { ...s, isAssigned: true } : s
+            ));
+            
+            // Đồng thời cập nhật danh sách exams để những lần mở sau vẫn lưu trạng thái
+            setExams(prevExams => prevExams.map(ex => {
+                if (ex._id === assignExamId) {
+                    return { ...ex, allowed_students: [...(ex.allowed_students || []), studentId] };
+                }
+                return ex;
+            }));
+
         } catch (error) {
             console.error("Lỗi gán sinh viên:", error);
             alert(error.response?.data?.message || "Lỗi khi gán sinh viên");
@@ -215,8 +236,9 @@ const TeacherDashboard = () => {
         modalContent: { background: 'white', width: '100%', maxWidth: '800px', borderRadius: '12px', padding: '30px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 10px 25px rgba(0,0,0,0.2)' },
         questionBox: { background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '15px', marginBottom: '15px' },
         correctOption: { color: '#38a169', fontWeight: 'bold' },
-        studentRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', borderBottom: '1px solid #edf2f7' },
-        assignBtn: { padding: '6px 12px', background: '#38a169', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }
+        studentRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px', borderBottom: '1px solid #edf2f7', transition: 'background-color 0.2s' },
+        assignBtn: { padding: '8px 16px', background: '#38a169', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', transition: 'all 0.2s' },
+        assignedBadge: { padding: '8px 16px', background: '#edf2f7', color: '#718096', border: 'none', borderRadius: '6px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '5px' }
     };
 
     return (
@@ -300,7 +322,7 @@ const TeacherDashboard = () => {
                                         <button 
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                handleOpenAssign(exam._id);
+                                                handleOpenAssign(exam);
                                             }}
                                             style={{ padding: '6px 10px', background: '#f0fff4', color: '#2f855a', border: '1px solid #c6f6d5', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}
                                         >
@@ -398,17 +420,25 @@ const TeacherDashboard = () => {
                             ) : (
                                 <div>
                                     {studentsList.map(student => (
-                                        <div key={student._id} style={styles.studentRow}>
+                                        <div key={student._id} style={{...styles.studentRow, backgroundColor: student.isAssigned ? '#f8fafc' : 'white'}}>
                                             <div>
-                                                <strong>{student.full_name}</strong>
-                                                <div style={{ fontSize: '13px', color: '#718096' }}>{student.username}</div>
+                                                <strong style={{ color: student.isAssigned ? '#a0aec0' : '#2d3748' }}>{student.full_name}</strong>
+                                                <div style={{ fontSize: '13px', color: '#a0aec0' }}>{student.username}</div>
                                             </div>
-                                            <button 
-                                                style={styles.assignBtn}
-                                                onClick={() => handleAssignStudent(student._id)}
-                                            >
-                                                Gán vào thi
-                                            </button>
+                                            {student.isAssigned ? (
+                                                <div style={styles.assignedBadge}>
+                                                    ✓ Đã gán
+                                                </div>
+                                            ) : (
+                                                <button 
+                                                    style={styles.assignBtn}
+                                                    onClick={() => handleAssignStudent(student._id)}
+                                                    onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+                                                    onMouseOut={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+                                                >
+                                                    Gán vào thi
+                                                </button>
+                                            )}
                                         </div>
                                     ))}
                                 </div>

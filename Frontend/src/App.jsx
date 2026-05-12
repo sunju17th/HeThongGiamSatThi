@@ -7,6 +7,7 @@ import CreateExam from './pages/CreateExam';
 import ExamResults from './pages/ExamResults';
 import StudentPortal from './pages/StudentPortal';
 import StudentHistory from './pages/StudentHistory';
+import StudentExamResult from './pages/StudentExamResult';
 import HomePage from './pages/HomePage';
 import RegisterPage from './pages/RegisterPage';
 
@@ -91,6 +92,15 @@ function App() {
               element={
                 <ProtectedRoute allowedRole="student">
                   <ExamRoom />
+                </ProtectedRoute>
+              } 
+            />
+            {/* Kết quả thi của sinh viên sau khi nộp bài */}
+            <Route 
+              path="/student/exam-result/:sessionId" 
+              element={
+                <ProtectedRoute allowedRole="student">
+                  <StudentExamResult />
                 </ProtectedRoute>
               } 
             />
