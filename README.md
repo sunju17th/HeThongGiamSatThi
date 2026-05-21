@@ -22,14 +22,14 @@ Một nền tảng thi trắc nghiệm trực tuyến toàn diện với tính n
   - Tự động cộng dồn số lần vi phạm. Nếu vượt quá giới hạn (VD: 3 lần), hệ thống tự động **Khóa bài và Hủy kết quả**.
 - **Lịch sử thi:** Xem lại kết quả các bài thi đã làm.
 
-## 🛠 Công nghệ sử dụng
+##  Công nghệ sử dụng
 
 - **Frontend:** ReactJS (Vite), React Router DOM v6, Axios, Context API (Quản lý State Xác thực), CSS-in-JS (Inline styles). Giao diện thiết kế theo phong cách Glassmorphism hiện đại.
 - **Backend:** Node.js, Express.js.
 - **Database:** MongoDB (Mongoose Schema).
 - **Bảo mật:** JWT (JSON Web Tokens), Bcrypt (Mã hóa mật khẩu).
 
-## 📂 Cấu trúc thư mục
+##  Cấu trúc thư mục
 
 ```text
 HeThongGiamSatKiThi/
@@ -50,7 +50,7 @@ HeThongGiamSatKiThi/
     └── package.json
 ```
 
-## 🚀 Hướng dẫn cài đặt & Chạy dự án
+##  Hướng dẫn cài đặt & Chạy dự án
 
 ### Yêu cầu hệ thống
 - Node.js (v16 trở lên)
@@ -91,7 +91,7 @@ HeThongGiamSatKiThi/
    ```
 4. Mở trình duyệt và truy cập: `http://localhost:5173`
 
-## 💡 Hướng dẫn sử dụng cơ bản
+## Hướng dẫn sử dụng cơ bản
 
 1. Truy cập Frontend, chọn **"Đăng ký ngay"** để tạo một tài khoản mới. Mặc định tài khoản tạo ra sẽ có role là `student`.
 2. Để có tài khoản **Giáo viên**, bạn có thể tạo thủ công trực tiếp trong MongoDB (Sửa trường `role` thành `teacher`) hoặc dùng tính năng Update User trên Backend thông qua Postman.
@@ -99,5 +99,3 @@ HeThongGiamSatKiThi/
 4. Mở trình duyệt ẩn danh, đăng nhập bằng tài khoản sinh viên vừa được gán -> **Vào phòng thi**.
 5. Thử chuyển Tab hoặc click sang màn hình khác để test tính năng hệ thống tự động cảnh báo gian lận.
 
-## 📄 Giấy phép (License)
-Dự án được xây dựng cho mục đích học tập và nghiên cứu. Bạn có thể tự do sao chép, chỉnh sửa và phát triển thêm.
