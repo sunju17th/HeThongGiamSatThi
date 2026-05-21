@@ -7,6 +7,7 @@ import {
     deleteExam,
     joinExam,
     getExamSessions,
+    addStudentToExam
 } from '../controllers/examController.js';
 import { protect, authorize } from '../middleware/authMiddleware.js';
 
@@ -29,6 +30,7 @@ router.route('/:id/sessions').get(protect, getExamSessions);
 
 router.post('/:id/join', protect, authorize('student'), joinExam);
 
+router.post('/:id/assign', protect, authorize('teacher', 'admin'), addStudentToExam);
 
 
 export default router;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
@@ -18,31 +18,47 @@ const ExamRoom = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
+    const hasJoinedRef = useRef(false);
+
     // Bắt đầu vào thi
     useEffect(() => {
-        const joinExam = async () => {
+        if (hasJoinedRef.current) return;
+        hasJoinedRef.current = true;
+
+        const initExam = async () => {
             try {
-                const response = await api.post(`/exams/${examId}/join`);
-                // Giả định backend trả về { session, exam, questions } hoặc kết cấu tương tự
-                const { session: sessionData, exam: examData, questions: questionsData } = response.data;
-                
+                // 1. Gọi API join để tạo/lấy session
+                const joinRes = await api.post(`/exams/${examId}/join`);
+                const sessionData = joinRes.data;
                 setSession(sessionData);
+
+                // 2. Gọi API get exam để lấy chi tiết đề thi và câu hỏi
+                const examRes = await api.get(`/exams/${examId}`);
+                const examData = examRes.data;
                 setExam(examData);
-                setQuestions(questionsData || examData.questions || []);
+                setQuestions(examData.questions || []);
                 
-                // Khởi tạo thời gian còn lại (tính bằng giây)
-                // Nếu backend trả về thời gian còn lại (remainingSeconds) thì dùng, nếu không thì dùng duration_minutes
-                const durationSeconds = response.data.remainingTime || (examData.duration_minutes * 60) || 3600;
-                setTimeLeft(durationSeconds);
+                // 3. Khởi tạo thời gian còn lại (tính bằng giây)
+                const durationSeconds = (examData.duration_minutes * 60) || 3600;
+                
+                // Tính toán thời gian đã trôi qua nếu reconnect
+                const startTime = new Date(sessionData.start_time);
+                const now = new Date();
+                const elapsedSeconds = Math.floor((now - startTime) / 1000);
+                
+                let remaining = durationSeconds - elapsedSeconds;
+                if (remaining <= 0) remaining = 0;
+
+                setTimeLeft(remaining);
                 setLoading(false);
             } catch (err) {
                 console.error("Lỗi khi tham gia kỳ thi:", err);
-                setError(err.response?.data?.message || "Không thể vào phòng thi. Có thể bạn đã thi hoặc lỗi máy chủ.");
+                setError(err.response?.data?.message || err.message || "Không thể vào phòng thi. Có thể bạn đã thi hoặc lỗi máy chủ.");
                 setLoading(false);
             }
         };
 
-        joinExam();
+        initExam();
     }, [examId]);
 
     // Đồng hồ đếm ngược nội bộ
@@ -79,8 +95,8 @@ const ExamRoom = () => {
                 answers: formattedAnswers
             });
             
-            alert(`Nộp bài thành công! Điểm của bạn: ${response.data.score || 0}`);
-            navigate('/student');
+            alert(`Nộp bài thành công!`);
+            navigate(`/student/exam-result/${session._id}`);
         } catch (err) {
             console.error("Lỗi khi nộp bài:", err);
             alert("Đã xảy ra lỗi khi nộp bài vui lòng báo cáo với giám thị!");
@@ -103,7 +119,7 @@ const ExamRoom = () => {
                 // Nếu backend gài isLocked: true vì vi phạm quá nhiều lần
                 if (response.data.isLocked) {
                     alert("Tài khoản của bạn đã bị khóa khỏi bài thi do vi phạm quy chế quá nhiều lần!");
-                    navigate('/student');
+                    navigate(`/student/exam-result/${session._id}`);
                 } else {
                     alert(`CẢNH BÁO VI PHẠM: Giám thị đã ghi nhận bạn rời khỏi màn hình thi!`);
                 }
@@ -145,74 +161,98 @@ const ExamRoom = () => {
         }));
     };
 
-    // --- Inline CSS ---
+    // --- Modern CSS ---
     const styles = {
-        container: { padding: '20px', fontFamily: 'Arial, sans-serif', maxWidth: '900px', margin: '0 auto' },
-        header: { position: 'sticky', top: 0, backgroundColor: 'white', padding: '15px', borderBottom: '2px solid #ddd', display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 100 },
-        timer: { fontSize: '24px', fontWeight: 'bold', color: timeLeft < 60 ? 'red' : '#333' },
-        errorMsg: { color: 'red', textAlign: 'center', marginTop: '50px' },
-        questionCard: { border: '1px solid #eee', borderRadius: '8px', padding: '20px', marginBottom: '20px', backgroundColor: '#fdfdfd' },
-        optionLabel: { display: 'block', margin: '10px 0', cursor: 'pointer', padding: '10px', border: '1px solid #ddd', borderRadius: '5px' },
-        selectedOption: { display: 'block', margin: '10px 0', cursor: 'pointer', padding: '10px', border: '1px solid #4CAF50', backgroundColor: '#e8f5e9', borderRadius: '5px' },
-        submitBtn: { padding: '12px 25px', backgroundColor: '#2196F3', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontSize: '16px', fontWeight: 'bold', display: 'block', margin: '30px auto' }
+        page: { minHeight: '100vh', backgroundColor: '#1a202c', padding: '20px 0', fontFamily: "'Inter', sans-serif" },
+        container: { maxWidth: '800px', margin: '0 auto', padding: '0 20px' },
+        header: { position: 'sticky', top: '20px', backgroundColor: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(10px)', padding: '20px 30px', borderRadius: '12px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 100, marginBottom: '30px' },
+        title: { margin: 0, fontSize: '24px', color: '#2d3748', fontWeight: 'bold' },
+        subtitle: { margin: '5px 0 0 0', color: '#718096', fontSize: '14px' },
+        timerBox: { display: 'flex', alignItems: 'center', gap: '10px', background: timeLeft < 60 ? '#fff5f5' : '#ebf4ff', padding: '10px 20px', borderRadius: '8px', border: `1px solid ${timeLeft < 60 ? '#fed7d7' : '#bee3f8'}` },
+        timer: { fontSize: '24px', fontWeight: 'bold', color: timeLeft < 60 ? '#e53e3e' : '#3182ce', fontFamily: 'monospace' },
+        errorCard: { backgroundColor: 'white', padding: '40px', borderRadius: '12px', textAlign: 'center', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' },
+        errorMsg: { color: '#e53e3e', fontSize: '20px', marginBottom: '20px' },
+        questionCard: { backgroundColor: 'white', borderRadius: '12px', padding: '30px', marginBottom: '25px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', transition: 'transform 0.2s' },
+        questionTitle: { margin: '0 0 20px 0', fontSize: '18px', color: '#2d3748', lineHeight: '1.5', fontWeight: '600' },
+        optionsGrid: { display: 'flex', flexDirection: 'column', gap: '12px' },
+        optionLabel: { display: 'flex', alignItems: 'center', padding: '16px 20px', border: '2px solid #edf2f7', borderRadius: '10px', cursor: 'pointer', transition: 'all 0.2s ease', backgroundColor: '#f8fafc', color: '#4a5568', fontWeight: '500' },
+        selectedOption: { display: 'flex', alignItems: 'center', padding: '16px 20px', border: '2px solid #4299e1', borderRadius: '10px', cursor: 'pointer', transition: 'all 0.2s ease', backgroundColor: '#ebf8ff', color: '#2b6cb0', fontWeight: 'bold' },
+        radioInput: { width: '18px', height: '18px', marginRight: '15px', cursor: 'pointer', accentColor: '#4299e1' },
+        submitBtn: { padding: '16px 40px', backgroundColor: '#4299e1', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '18px', fontWeight: 'bold', display: 'block', margin: '40px auto 20px', boxShadow: '0 4px 15px rgba(66, 153, 225, 0.4)', transition: 'all 0.2s' }
     };
 
-    if (loading) return <div style={{ textAlign: 'center', padding: '50px' }}>Đang nạp dữ liệu phòng thi...</div>;
+    if (loading) return <div style={{ textAlign: 'center', padding: '50px', color: 'white', fontFamily: "'Inter', sans-serif" }}>Đang khởi tạo phòng thi...</div>;
     
     if (error) return (
-        <div style={styles.container}>
-            <h2 style={styles.errorMsg}>{error}</h2>
-            <button style={styles.submitBtn} onClick={() => navigate('/student')}>Quay lại</button>
+        <div style={styles.page}>
+            <div style={styles.container}>
+                <div style={styles.errorCard}>
+                    <h2 style={styles.errorMsg}>{error}</h2>
+                    <button style={styles.submitBtn} onClick={() => navigate('/student')}>Quay lại Bảng điều khiển</button>
+                </div>
+            </div>
         </div>
     );
 
     return (
-        <div style={styles.container}>
-            <div style={styles.header}>
+        <div style={styles.page}>
+            <div style={styles.container}>
+                <div style={styles.header}>
+                    <div>
+                        <h2 style={styles.title}>{exam?.title || 'Bài thi'}</h2>
+                        <p style={styles.subtitle}>Sinh viên: <strong>{user?.full_name || user?.username}</strong></p>
+                    </div>
+                    <div style={styles.timerBox}>
+                        <span style={{ fontSize: '20px' }}>⏳</span>
+                        <div style={styles.timer}>{formatTime(timeLeft)}</div>
+                    </div>
+                </div>
+
                 <div>
-                    <h2 style={{ margin: 0 }}>{exam?.title || 'Bài thi'}</h2>
-                    <p style={{ margin: '5px 0 0 0', color: '#666' }}>Sinh viên: {user?.username}</p>
-                </div>
-                <div style={styles.timer}>
-                    ⏳ {formatTime(timeLeft)}
-                </div>
-            </div>
-
-            <div style={{ marginTop: '20px' }}>
-                {questions && questions.length > 0 ? (
-                    questions.map((q, index) => (
-                        <div key={q._id} style={styles.questionCard}>
-                            <h4>Câu {index + 1}: {q.content || q.text}</h4>
-                            <div>
-                                {q.options && q.options.map((opt, i) => {
-                                    const isSelected = answers[q._id] === opt;
-                                    return (
-                                        <label 
-                                            key={i} 
-                                            style={isSelected ? styles.selectedOption : styles.optionLabel}
-                                        >
-                                            <input 
-                                                type="radio" 
-                                                name={`question-${q._id}`} 
-                                                value={opt}
-                                                checked={isSelected}
-                                                onChange={() => handleSelectOption(q._id, opt)}
-                                                style={{ marginRight: '10px' }}
-                                            />
-                                            {opt}
-                                        </label>
-                                    );
-                                })}
+                    {questions && questions.length > 0 ? (
+                        questions.map((q, index) => (
+                            <div key={q._id} style={styles.questionCard}>
+                                <h4 style={styles.questionTitle}>Câu {index + 1}: {q.content || q.text}</h4>
+                                <div style={styles.optionsGrid}>
+                                    {q.options && q.options.map((opt, i) => {
+                                        const isSelected = answers[q._id] === opt;
+                                        return (
+                                            <label 
+                                                key={i} 
+                                                style={isSelected ? styles.selectedOption : styles.optionLabel}
+                                                onMouseOver={(e) => { if (!isSelected) e.currentTarget.style.borderColor = '#cbd5e0'; }}
+                                                onMouseOut={(e) => { if (!isSelected) e.currentTarget.style.borderColor = '#edf2f7'; }}
+                                            >
+                                                <input 
+                                                    type="radio" 
+                                                    name={`question-${q._id}`} 
+                                                    value={opt}
+                                                    checked={isSelected}
+                                                    onChange={() => handleSelectOption(q._id, opt)}
+                                                    style={styles.radioInput}
+                                                />
+                                                {String.fromCharCode(65 + i)}. {opt}
+                                            </label>
+                                        );
+                                    })}
+                                </div>
                             </div>
+                        ))
+                    ) : (
+                        <div style={styles.errorCard}>
+                            <p style={{ color: '#718096' }}>Không có dữ liệu câu hỏi.</p>
                         </div>
-                    ))
-                ) : (
-                    <p>Không có dữ liệu câu hỏi.</p>
-                )}
+                    )}
 
-                <button style={styles.submitBtn} onClick={handleSubmit}>
-                    Nộp Bài
-                </button>
+                    <button 
+                        style={styles.submitBtn} 
+                        onClick={handleSubmit}
+                        onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+                        onMouseOut={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+                    >
+                        Nộp Bài Ngay
+                    </button>
+                </div>
             </div>
         </div>
     );
