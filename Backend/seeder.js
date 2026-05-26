@@ -30,6 +30,14 @@ const importData = async () => {
 
         // 1. TẠO USERS (3 Giáo viên, 30 Sinh viên)
         const usersToCreate = [];
+        // Tạo 1 admin
+        usersToCreate.push({
+            username: 'admin',
+            password: hashedPassword,
+            full_name: 'Quản trị viên Hệ thống',
+            role: 'admin'
+        });
+
         // Tạo 3 giáo viên
         for (let i = 1; i <= 3; i++) {
             usersToCreate.push({
@@ -119,13 +127,14 @@ const importData = async () => {
                         });
                     }
 
+                    const finalStatus = proctoring_logs.length >= exam.max_violations ? 'locked' : 'submitted';
                     sessionsToCreate.push({
                         exam_id: exam._id,
                         student_id: studentId,
                         start_time: new Date(Date.now() - 60 * 60 * 1000),
                         submit_time: new Date(),
-                        status: 'submitted',
-                        total_score: Math.floor(Math.random() * 20), // Giả lập điểm từ 0 đến 20
+                        status: finalStatus, 
+                        total_score: finalStatus === 'locked' ? 0 : Math.floor(Math.random() * 20), // Bị khóa thì điểm về 0
                         violation_count: proctoring_logs.length,
                         proctoring_logs: proctoring_logs,
                         answers: answers
