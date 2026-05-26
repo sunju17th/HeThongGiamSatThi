@@ -18,11 +18,11 @@ router.post('/login', loginUser);
 
 
 router.route('/')
-    .get(protect, authorize('teacher'), getUsers);
+    .get(protect, authorize('teacher', 'admin'), getUsers);
 
 router.route('/:id')
     .get(protect, getUserById)
     .put(protect, updateUser)
-    .delete(protect, authorize('teacher'), deleteUser);
+    .delete(protect, authorize('teacher', 'admin'), deleteUser);
 
 export default router;

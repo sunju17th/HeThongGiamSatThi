@@ -22,8 +22,10 @@ export const getExams = async (req, res) => {
     try {
         let exams;
 
-        // Nếu là giáo viên, chỉ lấy các kỳ thi do giáo viên đó tạo
-        if (req.user.role === 'teacher') {
+        if (req.user.role === 'admin') {
+            exams = await Exam.find({})
+                .populate('questions', '-correct_answer');
+        } else if (req.user.role === 'teacher') {
             exams = await Exam.find({ teacher_id: req.user._id })
                 .populate('questions', '-correct_answer'); 
         }
@@ -114,9 +116,13 @@ export const deleteExam = async (req, res) => {
             return res.status(404).json({ message: 'Exam not found' });
         }
 
-        if (exam.teacher_id.toString() !== req.user._id.toString()) {
-            return res.status(403).json({ message: 'Not authorized to delete this exam' });
+        if (req.user.role !== 'admin')
+        {
+             if (exam.teacher_id.toString() !== req.user._id.toString() || req.user.role === 'student') {
+                return res.status(403).json({ message: 'Not authorized to delete this exam' });
+            }
         }
+       
 
         await exam.deleteOne();
         res.json({ message: 'Exam removed' });
@@ -257,9 +263,14 @@ export const deleteExamAndSessions = async (req, res) => {
         
         const exam = await Exam.findById(examId);
         if (!exam) return res.status(404).json({ message: 'Không tìm thấy bài thi' });
-        if (req.user.role !== 'teacher' || exam.teacher_id.toString() !== req.user._id.toString()) {
-            return res.status(403).json({ message: 'Bạn không có quyền xóa kỳ thi này' });
+
+        if (req.user.role !== 'admin')
+        {
+             if (exam.teacher_id.toString() !== req.user._id.toString() || req.user.role === 'student') {
+                return res.status(403).json({ message: 'Not authorized to delete this exam' });
+            }
         }
+       
         
         // Xóa tất cả phiên thi liên quan đến kỳ thi này
         await ExamSession.deleteMany({ exam_id: examId });
