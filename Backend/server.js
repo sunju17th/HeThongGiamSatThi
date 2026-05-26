@@ -27,12 +27,14 @@ import userRoutes from './routes/userRoutes.js';
 import questionRoutes from './routes/questionRoutes.js';
 import examRoutes from './routes/examRoutes.js';
 import sessionRoutes from './routes/sessionRoutes.js';
+import adminRoutes from './routes/adminRoutes.js';
 
 // Nạp các Routes vào application
 app.use('/api/users', userRoutes);
 app.use('/api/questions', questionRoutes);
 app.use('/api/exams', examRoutes);
 app.use('/api/sessions', sessionRoutes);
+app.use('/api/admin', adminRoutes);
 
 
 const PORT = process.env.PORT || 5000;

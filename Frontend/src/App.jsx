@@ -10,6 +10,7 @@ import StudentHistory from './pages/StudentHistory';
 import StudentExamResult from './pages/StudentExamResult';
 import HomePage from './pages/HomePage';
 import RegisterPage from './pages/RegisterPage';
+import AdminDashboard from './pages/AdminDashboard';
 
 import ExamRoom from './pages/ExamRoom';
 
@@ -38,6 +39,16 @@ function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
+            
+            {/* Trang Quản trị viên (Admin) */}
+            <Route 
+              path="/admin" 
+              element={
+                <ProtectedRoute allowedRole="admin">
+                  <AdminDashboard />
+                </ProtectedRoute>
+              } 
+            />
             
             {/* Áp dụng bảo vệ cho trang Teacher */}
             <Route 
