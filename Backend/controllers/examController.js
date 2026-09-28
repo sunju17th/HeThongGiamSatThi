@@ -5,6 +5,11 @@ import mongoose from 'mongoose';
 // tao ki thi 
 export const createExam = async (req, res) => {
     try {
+        const { start_time, end_time } = req.body;
+        if (start_time && end_time && new Date(start_time) >= new Date(end_time)) {
+            return res.status(400).json({ message: 'Thời gian bắt đầu phải nhỏ hơn thời gian kết thúc!' });
+        }
+
         const exam = new Exam({
             ...req.body,
             teacher_id: req.user._id,
@@ -88,14 +93,22 @@ export const updateExam = async (req, res) => {
             return res.status(404).json({ message: 'Không tìm thấy bài thi' });
         }
 
-        if (exam.teacher_id.toString() !== req.user._id.toString()) {
+        if (exam.teacher_id.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
             return res.status(403).json({ message: 'Bạn không có quyền sửa bài thi này' });
         }
 
+        const newStartTime = req.body.start_time || exam.start_time;
+        const newEndTime = req.body.end_time || exam.end_time;
+
+        if (newStartTime && newEndTime && new Date(newStartTime) >= new Date(newEndTime)) {
+            return res.status(400).json({ message: 'Thời gian bắt đầu phải nhỏ hơn thời gian kết thúc!' });
+        }
+
         exam.title = req.body.title || exam.title;
-        exam.duration_minutes = req.body.duration_minutes || exam.duration_minutes;
-        exam.start_time = req.body.start_time || exam.start_time;
-        exam.end_time = req.body.end_time || exam.end_time;
+        exam.duration_minutes = req.body.duration_minutes !== undefined ? req.body.duration_minutes : exam.duration_minutes;
+        exam.start_time = newStartTime;
+        exam.end_time = newEndTime;
+        if (req.body.max_violations !== undefined) exam.max_violations = req.body.max_violations;
         exam.questions = req.body.questions || exam.questions;
         exam.allowed_students = req.body.allowed_students || exam.allowed_students;
 

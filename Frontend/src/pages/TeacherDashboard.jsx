@@ -46,6 +46,11 @@ const TeacherDashboard = () => {
         e.preventDefault();
         if (!editingExam) return;
 
+        if (new Date(editingExam.start_time) >= new Date(editingExam.end_time)) {
+            alert("Lỗi: Thời gian bắt đầu phải nhỏ hơn thời gian kết thúc!");
+            return;
+        }
+
         setSavingEdit(true);
         try {
             const payload = {

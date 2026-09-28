@@ -61,6 +61,12 @@ const CreateExam = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
+
+        if (new Date(examData.start_time) >= new Date(examData.end_time)) {
+            setError("Thời gian bắt đầu phải nhỏ hơn thời gian kết thúc!");
+            return;
+        }
+
         setLoading(true);
 
         try {
