@@ -23,6 +23,6 @@ router.route('/')
 router.route('/:id')
     .get(protect, getUserById)
     .put(protect, updateUser)
-    .delete(protect, authorize('teacher', 'admin'), deleteUser);
+    .delete(protect, authorize('admin'), deleteUser);
 
 export default router;

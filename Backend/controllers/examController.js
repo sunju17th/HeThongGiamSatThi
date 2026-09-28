@@ -52,18 +52,17 @@ export const getExamById = async (req, res) => {
             return res.status(404).json({ message: 'Không tìm thấy bài thi' });
         }
 
+        const isAdmin = req.user.role === 'admin';
         const isTeacherOwner = req.user.role === 'teacher' && exam.teacher_id.toString() === req.user._id.toString();
-        
-        const isAllowedStudent = req.user.role === 'student' && exam.allowed_students.includes(req.user._id);
+        const isAllowedStudent = req.user.role === 'student' && exam.allowed_students.some(id => id.toString() === req.user._id.toString());
 
-        if (!isTeacherOwner && !isAllowedStudent) {
+        if (!isAdmin && !isTeacherOwner && !isAllowedStudent) {
             return res.status(403).json({ message: 'Bạn không có quyền truy cập vào bài thi này' });
         }
 
-
         let finalExam;
 
-        if (isTeacherOwner) {
+        if (isTeacherOwner || isAdmin) {
             finalExam = await Exam.findById(req.params.id)
                 .populate('questions') 
                 .populate('allowed_students', 'full_name username role');
