@@ -209,40 +209,79 @@ const StudentPortal = () => {
                             </div>
                         )}
 
-                        {!error && exams.map((exam) => (
-                            <div 
-                                key={exam._id} 
-                                style={styles.card}
-                                onMouseOver={(e) => {
-                                    e.currentTarget.style.transform = 'translateY(-4px)';
-                                    e.currentTarget.style.boxShadow = '0 12px 20px rgba(0,0,0,0.08)';
-                                }}
-                                onMouseOut={(e) => {
-                                    e.currentTarget.style.transform = 'translateY(0)';
-                                    e.currentTarget.style.boxShadow = '0 4px 15px rgba(0,0,0,0.03)';
-                                }}
-                            >
-                                <div>
-                                    <h4 style={styles.cardTitle}>{exam.title || 'Bài thi không tên'}</h4>
-                                    <p style={styles.cardDetail}>
-                                        <span role="img" aria-label="time">⏳</span> 
-                                        Thời lượng: <strong style={styles.strong}>{exam.duration_minutes || 60} phút</strong>
-                                    </p>
-                                    <p style={styles.cardDetail}>
-                                        <span role="img" aria-label="subject">📚</span> 
-                                        Môn học: <strong style={styles.strong}>{exam.subject || 'Đang cập nhật'}</strong>
-                                    </p>
-                                </div>
-                                <button 
-                                    style={styles.enterBtn} 
-                                    onClick={() => handleEnterExam(exam._id)}
-                                    onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#2f855a'}
-                                    onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#38a169'}
+                        {!error && exams.map((exam) => {
+                            const now = new Date();
+                            const startTime = exam.start_time ? new Date(exam.start_time) : null;
+                            const endTime = exam.end_time ? new Date(exam.end_time) : null;
+
+                            let statusBadge = null;
+                            let canJoin = true;
+                            let statusText = "Vào Thi Ngay";
+
+                            if (startTime && now < startTime) {
+                                statusBadge = <span style={{ padding: '4px 10px', background: '#fefcbf', color: '#744210', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>⏳ Chưa mở</span>;
+                                canJoin = false;
+                                statusText = "Chưa Đến Giờ Thi";
+                            } else if (endTime && now > endTime) {
+                                statusBadge = <span style={{ padding: '4px 10px', background: '#fed7d7', color: '#9b2c2c', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>🔴 Đã kết thúc</span>;
+                                canJoin = false;
+                                statusText = "Đã Hết Giờ Thi";
+                            } else {
+                                statusBadge = <span style={{ padding: '4px 10px', background: '#c6f6d5', color: '#22543d', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>🟢 Đang mở</span>;
+                                canJoin = true;
+                            }
+
+                            return (
+                                <div 
+                                    key={exam._id} 
+                                    style={styles.card}
+                                    onMouseOver={(e) => {
+                                        e.currentTarget.style.transform = 'translateY(-4px)';
+                                        e.currentTarget.style.boxShadow = '0 12px 20px rgba(0,0,0,0.08)';
+                                    }}
+                                    onMouseOut={(e) => {
+                                        e.currentTarget.style.transform = 'translateY(0)';
+                                        e.currentTarget.style.boxShadow = '0 4px 15px rgba(0,0,0,0.03)';
+                                    }}
                                 >
-                                    Vào Thi Ngay
-                                </button>
-                            </div>
-                        ))}
+                                    <div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+                                            <h4 style={{ ...styles.cardTitle, borderBottom: 'none', paddingBottom: 0, margin: 0 }}>{exam.title || 'Bài thi không tên'}</h4>
+                                            {statusBadge}
+                                        </div>
+                                        <p style={styles.cardDetail}>
+                                            <span role="img" aria-label="time">⏳</span> 
+                                            Thời lượng: <strong style={styles.strong}>{exam.duration_minutes || 60} phút</strong>
+                                        </p>
+                                        <p style={styles.cardDetail}>
+                                            <span role="img" aria-label="start">📅</span> 
+                                            Bắt đầu: <strong style={styles.strong}>{startTime ? startTime.toLocaleString('vi-VN') : 'N/A'}</strong>
+                                        </p>
+                                        <p style={styles.cardDetail}>
+                                            <span role="img" aria-label="end">🏁</span> 
+                                            Kết thúc: <strong style={styles.strong}>{endTime ? endTime.toLocaleString('vi-VN') : 'N/A'}</strong>
+                                        </p>
+                                        <p style={styles.cardDetail}>
+                                            <span role="img" aria-label="alert">⚠️</span> 
+                                            Cho phép vi phạm: <strong style={styles.strong}>{exam.max_violations ?? 3} lần</strong>
+                                        </p>
+                                    </div>
+                                    <button 
+                                        style={{
+                                            ...styles.enterBtn,
+                                            backgroundColor: canJoin ? '#38a169' : '#a0aec0',
+                                            cursor: canJoin ? 'pointer' : 'not-allowed'
+                                        }} 
+                                        onClick={() => canJoin && handleEnterExam(exam._id)}
+                                        disabled={!canJoin}
+                                        onMouseOver={(e) => { if (canJoin) e.currentTarget.style.backgroundColor = '#2f855a'; }}
+                                        onMouseOut={(e) => { if (canJoin) e.currentTarget.style.backgroundColor = '#38a169'; }}
+                                    >
+                                        {statusText}
+                                    </button>
+                                </div>
+                            );
+                        })}
                     </div>
                 )}
             </main>

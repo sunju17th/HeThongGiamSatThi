@@ -21,8 +21,8 @@ export const registerUser = async (req, res) => {
             return res.status(400).json({ message: 'Tên đăng nhập phải có ít nhất 3 ký tự' });
         }
 
-        if (password.length < 6) {
-            return res.status(400).json({ message: 'Mật khẩu phải có ít nhất 6 ký tự' });
+        if (password.length < 8) {
+            return res.status(400).json({ message: 'Mật khẩu phải có ít nhất 8 ký tự' });
         }
 
         const userExists = await User.findOne({ username: username.trim() });
@@ -41,7 +41,7 @@ export const registerUser = async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, salt);
 
         const user = await User.create({ 
-            username: username.trim(), 
+            username: username.trim(), // trim() để loại bỏ khoảng trắng thừa ở đầu và cuối chuỗi
             password: hashedPassword, 
             role: assignedRole, 
             full_name: full_name.trim() 
@@ -148,8 +148,8 @@ export const updateUser = async (req, res) => {
         }
 
         if (req.body.password) {
-            if (req.body.password.length < 6) {
-                return res.status(400).json({ message: 'Mật khẩu mới phải có ít nhất 6 ký tự' });
+            if (req.body.password.length <  8) {
+                return res.status(400).json({ message: 'Mật khẩu mới phải có ít nhất 8 ký tự' });
             }
             const salt = await bcrypt.genSalt(10);
             user.password = await bcrypt.hash(req.body.password, salt);
