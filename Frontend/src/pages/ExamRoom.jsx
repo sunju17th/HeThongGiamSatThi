@@ -19,6 +19,7 @@ const ExamRoom = () => {
     const [error, setError] = useState(null);
 
     const hasJoinedRef = useRef(false);
+    const lastViolationTimeRef = useRef(0);
 
     // Bắt đầu vào thi
     useEffect(() => {
@@ -109,11 +110,18 @@ const ExamRoom = () => {
         if (!session) return;
 
         const handleViolation = async (violationType) => {
+            const now = Date.now();
+            // Tránh ghi nhận trùng lặp vi phạm trong vòng 2.5 giây (loại bỏ double trigger giữa blur và visibilitychange)
+            if (now - lastViolationTimeRef.current < 2500) {
+                return;
+            }
+            lastViolationTimeRef.current = now;
+
             console.warn(`Phát hiện vi phạm: ${violationType}`);
             try {
                 const response = await api.post(`/sessions/${session._id}/logs`, {
-                    type: violationType,
-                    description: `Phát hiện hành vi ${violationType}`
+                    event_type: violationType,
+                    description: `Phát hiện hành vi ${violationType === 'tab_switch' ? 'chuyển Tab' : 'rời khỏi cửa sổ thi'}`
                 });
 
                 // Nếu backend gài isLocked: true vì vi phạm quá nhiều lần
@@ -135,7 +143,10 @@ const ExamRoom = () => {
         };
 
         const onWindowBlur = () => {
-             handleViolation('window_blur');
+            // Khi chuyển Tab, document.hidden = true và visibilitychange đã được kích hoạt, bỏ qua blur
+            if (!document.hidden) {
+                handleViolation('window_blur');
+            }
         };
 
         document.addEventListener("visibilitychange", onVisibilityChange);
