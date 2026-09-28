@@ -17,9 +17,12 @@ const ExamRoom = () => {
     const [timeLeft, setTimeLeft] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [showConfirmModal, setShowConfirmModal] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const hasJoinedRef = useRef(false);
     const lastViolationTimeRef = useRef(0);
+    const endTimeRef = useRef(null);
 
     // Bắt đầu vào thi
     useEffect(() => {
@@ -39,17 +42,14 @@ const ExamRoom = () => {
                 setExam(examData);
                 setQuestions(examData.questions || []);
                 
-                // 3. Khởi tạo thời gian còn lại (tính bằng giây)
+                // 3. Khởi tạo thời gian còn lại chuẩn xác theo server/start_time
                 const durationSeconds = (examData.duration_minutes * 60) || 3600;
+                const startTime = new Date(sessionData.start_time).getTime();
+                const calculatedEndTime = startTime + (durationSeconds * 1000);
+                endTimeRef.current = calculatedEndTime;
                 
-                // Tính toán thời gian đã trôi qua nếu reconnect
-                const startTime = new Date(sessionData.start_time);
-                const now = new Date();
-                const elapsedSeconds = Math.floor((now - startTime) / 1000);
-                
-                let remaining = durationSeconds - elapsedSeconds;
-                if (remaining <= 0) remaining = 0;
-
+                const now = Date.now();
+                let remaining = Math.max(0, Math.floor((calculatedEndTime - now) / 1000));
                 setTimeLeft(remaining);
                 setLoading(false);
             } catch (err) {
@@ -62,59 +62,55 @@ const ExamRoom = () => {
         initExam();
     }, [examId]);
 
-    // Đồng hồ đếm ngược nội bộ
+    // Đồng hồ đếm ngược dựa trên thời gian thực
     useEffect(() => {
-        if (timeLeft === null || timeLeft <= 0 || !session) return;
+        if (timeLeft === null || !session || !endTimeRef.current) return;
 
         const timerId = setInterval(() => {
-            setTimeLeft(prev => {
-                if (prev <= 1) {
-                    clearInterval(timerId);
-                    handleSubmit(); // Hết giờ thì tự động nộp bài
-                    return 0;
-                }
-                return prev - 1;
-            });
+            const now = Date.now();
+            const remaining = Math.max(0, Math.floor((endTimeRef.current - now) / 1000));
+            setTimeLeft(remaining);
+
+            if (remaining <= 0) {
+                clearInterval(timerId);
+                executeSubmit(); // Hết giờ tự động nộp bài
+            }
         }, 1000);
 
         return () => clearInterval(timerId);
-    }, [timeLeft, session]);
+    }, [session]);
 
-    // Nộp bài
-    const handleSubmit = useCallback(async () => {
-        if (!session) return;
+    // Thực thi nộp bài
+    const executeSubmit = useCallback(async () => {
+        if (!session || isSubmitting) return;
+        setIsSubmitting(true);
         
         try {
-            // Chuẩn bị payload: có thể backend yêu cầu mảng { questionId, selectedOption } hoặc một object
-            // Chuẩn bị payload khớp với backend: [{ question_id, selected_option }]
             const formattedAnswers = Object.keys(answers).map(qId => ({
                 question_id: qId,
                 selected_option: answers[qId]
             }));
 
-            const response = await api.post(`/sessions/${session._id}/submit`, {
+            await api.post(`/sessions/${session._id}/submit`, {
                 answers: formattedAnswers
             });
             
-            alert(`Nộp bài thành công!`);
             navigate(`/student/exam-result/${session._id}`);
         } catch (err) {
             console.error("Lỗi khi nộp bài:", err);
-            alert("Đã xảy ra lỗi khi nộp bài vui lòng báo cáo với giám thị!");
+            alert("Đã xảy ra lỗi khi nộp bài. Vui lòng báo cáo với giám thị!");
+            setIsSubmitting(false);
             navigate('/student');
         }
-    }, [answers, session, navigate]);
+    }, [answers, session, navigate, isSubmitting]);
 
-    // Xử lý giám sát (Proctoring - Nhiệm vụ 3)
+    // Xử lý giám sát (Proctoring)
     useEffect(() => {
         if (!session) return;
 
         const handleViolation = async (violationType) => {
             const now = Date.now();
-            // Tránh ghi nhận trùng lặp vi phạm trong vòng 2.5 giây (loại bỏ double trigger giữa blur và visibilitychange)
-            if (now - lastViolationTimeRef.current < 2500) {
-                return;
-            }
+            if (now - lastViolationTimeRef.current < 2500) return;
             lastViolationTimeRef.current = now;
 
             console.warn(`Phát hiện vi phạm: ${violationType}`);
@@ -124,12 +120,11 @@ const ExamRoom = () => {
                     description: `Phát hiện hành vi ${violationType === 'tab_switch' ? 'chuyển Tab' : 'rời khỏi cửa sổ thi'}`
                 });
 
-                // Nếu backend gài isLocked: true vì vi phạm quá nhiều lần
                 if (response.data.isLocked) {
                     alert("Tài khoản của bạn đã bị khóa khỏi bài thi do vi phạm quy chế quá nhiều lần!");
                     navigate(`/student/exam-result/${session._id}`);
                 } else {
-                    alert(`CẢNH BÁO VI PHẠM: Giám thị đã ghi nhận bạn rời khỏi màn hình thi!`);
+                    alert(`⚠️ CẢNH BÁO VI PHẠM: Giám thị đã ghi nhận bạn rời khỏi màn hình thi!`);
                 }
             } catch (err) {
                 console.error("Lỗi khi gửi log vi phạm:", err);
@@ -137,16 +132,11 @@ const ExamRoom = () => {
         };
 
         const onVisibilityChange = () => {
-            if (document.hidden) {
-                handleViolation('tab_switch');
-            }
+            if (document.hidden) handleViolation('tab_switch');
         };
 
         const onWindowBlur = () => {
-            // Khi chuyển Tab, document.hidden = true và visibilitychange đã được kích hoạt, bỏ qua blur
-            if (!document.hidden) {
-                handleViolation('window_blur');
-            }
+            if (!document.hidden) handleViolation('window_blur');
         };
 
         document.addEventListener("visibilitychange", onVisibilityChange);
@@ -158,8 +148,9 @@ const ExamRoom = () => {
         };
     }, [session, navigate]);
 
-    // Helpers format thời gian
+    // Format thời gian
     const formatTime = (seconds) => {
+        if (seconds === null || seconds < 0) return '00:00';
         const m = Math.floor(seconds / 60).toString().padStart(2, '0');
         const s = (seconds % 60).toString().padStart(2, '0');
         return `${m}:${s}`;
@@ -172,33 +163,59 @@ const ExamRoom = () => {
         }));
     };
 
-    // --- Modern CSS ---
-    const styles = {
-        page: { minHeight: '100vh', backgroundColor: '#1a202c', padding: '20px 0', fontFamily: "'Inter', sans-serif" },
-        container: { maxWidth: '800px', margin: '0 auto', padding: '0 20px' },
-        header: { position: 'sticky', top: '20px', backgroundColor: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(10px)', padding: '20px 30px', borderRadius: '12px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 100, marginBottom: '30px' },
-        title: { margin: 0, fontSize: '24px', color: '#2d3748', fontWeight: 'bold' },
-        subtitle: { margin: '5px 0 0 0', color: '#718096', fontSize: '14px' },
-        timerBox: { display: 'flex', alignItems: 'center', gap: '10px', background: timeLeft < 60 ? '#fff5f5' : '#ebf4ff', padding: '10px 20px', borderRadius: '8px', border: `1px solid ${timeLeft < 60 ? '#fed7d7' : '#bee3f8'}` },
-        timer: { fontSize: '24px', fontWeight: 'bold', color: timeLeft < 60 ? '#e53e3e' : '#3182ce', fontFamily: 'monospace' },
-        errorCard: { backgroundColor: 'white', padding: '40px', borderRadius: '12px', textAlign: 'center', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' },
-        errorMsg: { color: '#e53e3e', fontSize: '20px', marginBottom: '20px' },
-        questionCard: { backgroundColor: 'white', borderRadius: '12px', padding: '30px', marginBottom: '25px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', transition: 'transform 0.2s' },
-        questionTitle: { margin: '0 0 20px 0', fontSize: '18px', color: '#2d3748', lineHeight: '1.5', fontWeight: '600' },
-        optionsGrid: { display: 'flex', flexDirection: 'column', gap: '12px' },
-        optionLabel: { display: 'flex', alignItems: 'center', padding: '16px 20px', border: '2px solid #edf2f7', borderRadius: '10px', cursor: 'pointer', transition: 'all 0.2s ease', backgroundColor: '#f8fafc', color: '#4a5568', fontWeight: '500' },
-        selectedOption: { display: 'flex', alignItems: 'center', padding: '16px 20px', border: '2px solid #4299e1', borderRadius: '10px', cursor: 'pointer', transition: 'all 0.2s ease', backgroundColor: '#ebf8ff', color: '#2b6cb0', fontWeight: 'bold' },
-        radioInput: { width: '18px', height: '18px', marginRight: '15px', cursor: 'pointer', accentColor: '#4299e1' },
-        submitBtn: { padding: '16px 40px', backgroundColor: '#4299e1', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '18px', fontWeight: 'bold', display: 'block', margin: '40px auto 20px', boxShadow: '0 4px 15px rgba(66, 153, 225, 0.4)', transition: 'all 0.2s' }
+    const scrollToQuestion = (index) => {
+        const el = document.getElementById(`question-card-${index}`);
+        if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
     };
 
-    if (loading) return <div style={{ textAlign: 'center', padding: '50px', color: 'white', fontFamily: "'Inter', sans-serif" }}>Đang khởi tạo phòng thi...</div>;
+    const answeredCount = Object.keys(answers).length;
+    const totalCount = questions.length;
+    const isTimeWarning = timeLeft !== null && timeLeft <= 180; // Dưới 3 phút
+
+    const styles = {
+        page: { minHeight: '100vh', backgroundColor: '#0f172a', color: '#f8fafc', padding: '20px 0 60px 0', fontFamily: "'Inter', sans-serif" },
+        container: { maxWidth: '1000px', margin: '0 auto', padding: '0 20px' },
+        header: { position: 'sticky', top: '15px', backgroundColor: 'rgba(30, 41, 59, 0.92)', backdropFilter: 'blur(12px)', padding: '16px 24px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.1)', boxShadow: '0 10px 30px rgba(0, 0, 0, 0.3)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 100, marginBottom: '24px' },
+        title: { margin: 0, fontSize: '20px', color: '#f8fafc', fontWeight: '700' },
+        subtitle: { margin: '4px 0 0 0', color: '#94a3b8', fontSize: '13px' },
+        timerBox: { display: 'flex', alignItems: 'center', gap: '10px', background: isTimeWarning ? 'rgba(239, 68, 68, 0.2)' : 'rgba(59, 130, 246, 0.15)', padding: '8px 18px', borderRadius: '12px', border: `1px solid ${isTimeWarning ? '#ef4444' : '#3b82f6'}` },
+        timer: { fontSize: '22px', fontWeight: '800', color: isTimeWarning ? '#fca5a5' : '#60a5fa', fontFamily: 'monospace' },
+        
+        mainLayout: { display: 'grid', gridTemplateColumns: '1fr 280px', gap: '24px' },
+        questionCard: { backgroundColor: '#1e293b', borderRadius: '16px', padding: '24px', marginBottom: '20px', border: '1px solid rgba(255, 255, 255, 0.05)', boxShadow: '0 4px 20px rgba(0,0,0,0.2)' },
+        questionTitle: { margin: '0 0 16px 0', fontSize: '17px', color: '#f1f5f9', lineHeight: '1.6', fontWeight: '600' },
+        optionsGrid: { display: 'flex', flexDirection: 'column', gap: '10px' },
+        optionLabel: { display: 'flex', alignItems: 'center', padding: '14px 18px', border: '1.5px solid rgba(255, 255, 255, 0.1)', borderRadius: '12px', cursor: 'pointer', transition: 'all 0.2s ease', backgroundColor: 'rgba(15, 23, 42, 0.6)', color: '#cbd5e1', fontWeight: '500' },
+        selectedOption: { display: 'flex', alignItems: 'center', padding: '14px 18px', border: '1.5px solid #3b82f6', borderRadius: '12px', cursor: 'pointer', transition: 'all 0.2s ease', backgroundColor: 'rgba(59, 130, 246, 0.15)', color: '#93c5fd', fontWeight: '700' },
+        radioInput: { width: '18px', height: '18px', marginRight: '14px', cursor: 'pointer', accentColor: '#3b82f6' },
+        
+        sidebar: { backgroundColor: '#1e293b', borderRadius: '16px', padding: '20px', height: 'fit-content', position: 'sticky', top: '100px', border: '1px solid rgba(255, 255, 255, 0.05)' },
+        sidebarTitle: { margin: '0 0 12px 0', fontSize: '15px', color: '#f8fafc', fontWeight: '600' },
+        progressBarBg: { width: '100%', height: '8px', backgroundColor: '#0f172a', borderRadius: '4px', overflow: 'hidden', marginBottom: '16px' },
+        progressBarFill: { height: '100%', backgroundColor: '#3b82f6', transition: 'width 0.3s ease' },
+        navGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' },
+        navPill: { padding: '10px 0', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: '600', fontSize: '14px', transition: 'all 0.2s' },
+
+        submitBtn: { width: '100%', padding: '14px', backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '12px', cursor: 'pointer', fontSize: '16px', fontWeight: '700', marginTop: '20px', boxShadow: '0 4px 15px rgba(59, 130, 246, 0.4)', transition: 'all 0.2s' },
+        
+        modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
+        modalBox: { backgroundColor: '#1e293b', padding: '30px', borderRadius: '20px', maxWidth: '440px', width: '90%', border: '1px solid rgba(255, 255, 255, 0.1)', textAlign: 'center' },
+        modalTitle: { margin: '0 0 12px 0', fontSize: '22px', color: '#f8fafc', fontWeight: '700' },
+        modalText: { color: '#94a3b8', fontSize: '15px', lineHeight: '1.6', marginBottom: '20px' },
+        modalActions: { display: 'flex', gap: '12px' },
+        btnConfirm: { flex: 1, padding: '12px', backgroundColor: '#22c55e', color: 'white', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer' },
+        btnCancel: { flex: 1, padding: '12px', backgroundColor: '#475569', color: 'white', border: 'none', borderRadius: '10px', fontWeight: '600', cursor: 'pointer' }
+    };
+
+    if (loading) return <div style={{ textAlign: 'center', padding: '80px', color: '#94a3b8', fontFamily: "'Inter', sans-serif" }}>⚡ Đang kết nối phòng thi bảo mật...</div>;
     
     if (error) return (
         <div style={styles.page}>
             <div style={styles.container}>
-                <div style={styles.errorCard}>
-                    <h2 style={styles.errorMsg}>{error}</h2>
+                <div style={{ backgroundColor: '#1e293b', padding: '40px', borderRadius: '16px', textAlign: 'center', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+                    <h2 style={{ color: '#f87171', fontSize: '20px', marginBottom: '16px' }}>❌ {error}</h2>
                     <button style={styles.submitBtn} onClick={() => navigate('/student')}>Quay lại Bảng điều khiển</button>
                 </div>
             </div>
@@ -208,63 +225,128 @@ const ExamRoom = () => {
     return (
         <div style={styles.page}>
             <div style={styles.container}>
+                {/* Header Thanh Giám Sát Sticky */}
                 <div style={styles.header}>
                     <div>
-                        <h2 style={styles.title}>{exam?.title || 'Bài thi'}</h2>
+                        <h2 style={styles.title}>{exam?.title || 'Bài thi trắc nghiệm'}</h2>
                         <p style={styles.subtitle}>Sinh viên: <strong>{user?.full_name || user?.username}</strong></p>
                     </div>
                     <div style={styles.timerBox}>
-                        <span style={{ fontSize: '20px' }}>⏳</span>
+                        <span style={{ fontSize: '18px' }}>{isTimeWarning ? '⚠️' : '⏳'}</span>
                         <div style={styles.timer}>{formatTime(timeLeft)}</div>
                     </div>
                 </div>
 
-                <div>
-                    {questions && questions.length > 0 ? (
-                        questions.map((q, index) => (
-                            <div key={q._id} style={styles.questionCard}>
-                                <h4 style={styles.questionTitle}>Câu {index + 1}: {q.content || q.text}</h4>
-                                <div style={styles.optionsGrid}>
-                                    {q.options && q.options.map((opt, i) => {
-                                        const isSelected = answers[q._id] === opt;
-                                        return (
-                                            <label 
-                                                key={i} 
-                                                style={isSelected ? styles.selectedOption : styles.optionLabel}
-                                                onMouseOver={(e) => { if (!isSelected) e.currentTarget.style.borderColor = '#cbd5e0'; }}
-                                                onMouseOut={(e) => { if (!isSelected) e.currentTarget.style.borderColor = '#edf2f7'; }}
-                                            >
-                                                <input 
-                                                    type="radio" 
-                                                    name={`question-${q._id}`} 
-                                                    value={opt}
-                                                    checked={isSelected}
-                                                    onChange={() => handleSelectOption(q._id, opt)}
-                                                    style={styles.radioInput}
-                                                />
-                                                {String.fromCharCode(65 + i)}. {opt}
-                                            </label>
-                                        );
-                                    })}
+                <div style={styles.mainLayout}>
+                    {/* Danh Sách Câu Hỏi */}
+                    <div>
+                        {questions && questions.length > 0 ? (
+                            questions.map((q, index) => (
+                                <div key={q._id} id={`question-card-${index}`} style={styles.questionCard}>
+                                    <h4 style={styles.questionTitle}>Câu {index + 1}: {q.content || q.text}</h4>
+                                    <div style={styles.optionsGrid}>
+                                        {q.options && q.options.map((opt, i) => {
+                                            const isSelected = answers[q._id] === opt;
+                                            return (
+                                                <label 
+                                                    key={i} 
+                                                    style={isSelected ? styles.selectedOption : styles.optionLabel}
+                                                >
+                                                    <input 
+                                                        type="radio" 
+                                                        name={`question-${q._id}`} 
+                                                        value={opt}
+                                                        checked={isSelected}
+                                                        onChange={() => handleSelectOption(q._id, opt)}
+                                                        style={styles.radioInput}
+                                                    />
+                                                    {String.fromCharCode(65 + i)}. {opt}
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
+                            ))
+                        ) : (
+                            <div style={styles.questionCard}>
+                                <p style={{ color: '#94a3b8' }}>Chưa có câu hỏi cho bài thi này.</p>
                             </div>
-                        ))
-                    ) : (
-                        <div style={styles.errorCard}>
-                            <p style={{ color: '#718096' }}>Không có dữ liệu câu hỏi.</p>
-                        </div>
-                    )}
+                        )}
+                    </div>
 
-                    <button 
-                        style={styles.submitBtn} 
-                        onClick={handleSubmit}
-                        onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
-                        onMouseOut={(e) => e.currentTarget.style.transform = 'translateY(0)'}
-                    >
-                        Nộp Bài Ngay
-                    </button>
+                    {/* Sidebar Tiến Độ & Điều Hướng Fast-Nav */}
+                    <div style={styles.sidebar}>
+                        <h4 style={styles.sidebarTitle}>Tiến độ bài làm</h4>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#94a3b8', marginBottom: '8px' }}>
+                            <span>Đã trả lời</span>
+                            <strong style={{ color: '#38bdf8' }}>{answeredCount} / {totalCount}</strong>
+                        </div>
+                        <div style={styles.progressBarBg}>
+                            <div style={{ ...styles.progressBarFill, width: `${totalCount > 0 ? (answeredCount / totalCount) * 100 : 0}%` }}></div>
+                        </div>
+
+                        <h4 style={{ ...styles.sidebarTitle, marginTop: '20px' }}>Danh sách câu hỏi</h4>
+                        <div style={styles.navGrid}>
+                            {questions.map((q, index) => {
+                                const isAnswered = !!answers[q._id];
+                                return (
+                                    <button
+                                        key={q._id}
+                                        onClick={() => scrollToQuestion(index)}
+                                        style={{
+                                            ...styles.navPill,
+                                            backgroundColor: isAnswered ? '#3b82f6' : '#334155',
+                                            color: isAnswered ? '#ffffff' : '#94a3b8'
+                                        }}
+                                    >
+                                        {index + 1}
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        <button 
+                            style={styles.submitBtn}
+                            onClick={() => setShowConfirmModal(true)}
+                        >
+                            Nộp Bài Thi
+                        </button>
+                    </div>
                 </div>
             </div>
+
+            {/* Modal Xử Lý Xác Nhận Nộp Bài */}
+            {showConfirmModal && (
+                <div style={styles.modalOverlay}>
+                    <div style={styles.modalBox}>
+                        <h3 style={styles.modalTitle}>Xác nhận Nộp Bài?</h3>
+                        <p style={styles.modalText}>
+                            Bạn đã hoàn thành <strong>{answeredCount}</strong> / <strong>{totalCount}</strong> câu hỏi.
+                            {totalCount - answeredCount > 0 && (
+                                <span style={{ display: 'block', color: '#f87171', marginTop: '8px', fontWeight: '600' }}>
+                                    ⚠️ Bạn vẫn còn {totalCount - answeredCount} câu chưa trả lời!
+                                </span>
+                            )}
+                        </p>
+                        <div style={styles.modalActions}>
+                            <button 
+                                style={styles.btnCancel} 
+                                onClick={() => setShowConfirmModal(false)}
+                                disabled={isSubmitting}
+                            >
+                                Tiếp tục làm
+                            </button>
+                            <button 
+                                style={styles.btnConfirm} 
+                                onClick={executeSubmit}
+                                disabled={isSubmitting}
+                            >
+                                {isSubmitting ? 'Đang gửi...' : 'Nộp ngay'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
