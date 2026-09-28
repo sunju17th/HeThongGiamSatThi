@@ -10,6 +10,7 @@ import StudentHistory from './pages/StudentHistory';
 import StudentExamResult from './pages/StudentExamResult';
 import HomePage from './pages/HomePage';
 import RegisterPage from './pages/RegisterPage';
+import AdminDashboard from './pages/AdminDashboard';
 
 import ExamRoom from './pages/ExamRoom';
 
@@ -17,13 +18,17 @@ import ExamRoom from './pages/ExamRoom';
 const ProtectedRoute = ({ children, allowedRole }) => {
     const { user, loading } = useAuth();
     
-    if (loading) return <div>Đang kiểm tra quyền...</div>;
+    if (loading) return <div style={{ textAlign: 'center', padding: '50px', color: '#94a3b8' }}>Đang kiểm tra quyền...</div>;
     
     // Nếu chưa đăng nhập -> đuổi về trang login
     if (!user) return <Navigate to="/login" replace />;
     
-    // Nếu sai role (vd sinh viên lén vào trang giáo viên) -> đuổi về trang chủ
-    if (allowedRole && user.role !== allowedRole) return <Navigate to="/" replace />;
+    // Nếu truy cập sai role -> chuyển về dashboard tương ứng của user
+    if (allowedRole && user.role !== allowedRole) {
+        if (user.role === 'admin') return <Navigate to="/admin" replace />;
+        if (user.role === 'teacher') return <Navigate to="/teacher" replace />;
+        return <Navigate to="/student" replace />;
+    }
     
     return children; // Nếu hợp lệ thì cho phép hiển thị trang
 };
@@ -38,6 +43,16 @@ function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
+            
+            {/* Trang Quản trị viên (Admin) */}
+            <Route 
+              path="/admin" 
+              element={
+                <ProtectedRoute allowedRole="admin">
+                  <AdminDashboard />
+                </ProtectedRoute>
+              } 
+            />
             
             {/* Áp dụng bảo vệ cho trang Teacher */}
             <Route 

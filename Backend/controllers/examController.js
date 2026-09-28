@@ -5,6 +5,11 @@ import mongoose from 'mongoose';
 // tao ki thi 
 export const createExam = async (req, res) => {
     try {
+        const { start_time, end_time } = req.body;
+        if (start_time && end_time && new Date(start_time) >= new Date(end_time)) {
+            return res.status(400).json({ message: 'Thời gian bắt đầu phải nhỏ hơn thời gian kết thúc!' });
+        }
+
         const exam = new Exam({
             ...req.body,
             teacher_id: req.user._id,
@@ -22,8 +27,10 @@ export const getExams = async (req, res) => {
     try {
         let exams;
 
-        // Nếu là giáo viên, chỉ lấy các kỳ thi do giáo viên đó tạo
-        if (req.user.role === 'teacher') {
+        if (req.user.role === 'admin') {
+            exams = await Exam.find({})
+                .populate('questions', '-correct_answer');
+        } else if (req.user.role === 'teacher') {
             exams = await Exam.find({ teacher_id: req.user._id })
                 .populate('questions', '-correct_answer'); 
         }
@@ -50,18 +57,17 @@ export const getExamById = async (req, res) => {
             return res.status(404).json({ message: 'Không tìm thấy bài thi' });
         }
 
+        const isAdmin = req.user.role === 'admin';
         const isTeacherOwner = req.user.role === 'teacher' && exam.teacher_id.toString() === req.user._id.toString();
-        
-        const isAllowedStudent = req.user.role === 'student' && exam.allowed_students.includes(req.user._id);
+        const isAllowedStudent = req.user.role === 'student' && exam.allowed_students.some(id => id.toString() === req.user._id.toString());
 
-        if (!isTeacherOwner && !isAllowedStudent) {
+        if (!isAdmin && !isTeacherOwner && !isAllowedStudent) {
             return res.status(403).json({ message: 'Bạn không có quyền truy cập vào bài thi này' });
         }
 
-
         let finalExam;
 
-        if (isTeacherOwner) {
+        if (isTeacherOwner || isAdmin) {
             finalExam = await Exam.findById(req.params.id)
                 .populate('questions') 
                 .populate('allowed_students', 'full_name username role');
@@ -87,14 +93,22 @@ export const updateExam = async (req, res) => {
             return res.status(404).json({ message: 'Không tìm thấy bài thi' });
         }
 
-        if (exam.teacher_id.toString() !== req.user._id.toString()) {
+        if (exam.teacher_id.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
             return res.status(403).json({ message: 'Bạn không có quyền sửa bài thi này' });
         }
 
+        const newStartTime = req.body.start_time || exam.start_time;
+        const newEndTime = req.body.end_time || exam.end_time;
+
+        if (newStartTime && newEndTime && new Date(newStartTime) >= new Date(newEndTime)) {
+            return res.status(400).json({ message: 'Thời gian bắt đầu phải nhỏ hơn thời gian kết thúc!' });
+        }
+
         exam.title = req.body.title || exam.title;
-        exam.duration_minutes = req.body.duration_minutes || exam.duration_minutes;
-        exam.start_time = req.body.start_time || exam.start_time;
-        exam.end_time = req.body.end_time || exam.end_time;
+        exam.duration_minutes = req.body.duration_minutes !== undefined ? req.body.duration_minutes : exam.duration_minutes;
+        exam.start_time = newStartTime;
+        exam.end_time = newEndTime;
+        if (req.body.max_violations !== undefined) exam.max_violations = req.body.max_violations;
         exam.questions = req.body.questions || exam.questions;
         exam.allowed_students = req.body.allowed_students || exam.allowed_students;
 
@@ -114,9 +128,13 @@ export const deleteExam = async (req, res) => {
             return res.status(404).json({ message: 'Exam not found' });
         }
 
-        if (exam.teacher_id.toString() !== req.user._id.toString()) {
-            return res.status(403).json({ message: 'Not authorized to delete this exam' });
+        if (req.user.role !== 'admin')
+        {
+             if (exam.teacher_id.toString() !== req.user._id.toString() || req.user.role === 'student') {
+                return res.status(403).json({ message: 'Not authorized to delete this exam' });
+            }
         }
+       
 
         await exam.deleteOne();
         res.json({ message: 'Exam removed' });
@@ -257,9 +275,14 @@ export const deleteExamAndSessions = async (req, res) => {
         
         const exam = await Exam.findById(examId);
         if (!exam) return res.status(404).json({ message: 'Không tìm thấy bài thi' });
-        if (req.user.role !== 'teacher' || exam.teacher_id.toString() !== req.user._id.toString()) {
-            return res.status(403).json({ message: 'Bạn không có quyền xóa kỳ thi này' });
+
+        if (req.user.role !== 'admin')
+        {
+             if (exam.teacher_id.toString() !== req.user._id.toString() || req.user.role === 'student') {
+                return res.status(403).json({ message: 'Not authorized to delete this exam' });
+            }
         }
+       
         
         // Xóa tất cả phiên thi liên quan đến kỳ thi này
         await ExamSession.deleteMany({ exam_id: examId });

@@ -22,7 +22,10 @@ export const getSessions = async (req, res) => {
 export const getSessionById = async (req, res) => {
     try {
         const session = await ExamSession.findById(req.params.id)
-            .populate('exam_id')  
+            .populate({
+                path: 'exam_id',
+                populate: { path: 'questions' }
+            })  
             .populate('student_id', 'full_name username role');  
         
         if (!session) return res.status(404).json({ message: 'Phiên thi không tồn tại' });
@@ -52,7 +55,21 @@ export const addLog = async (req, res) => {
             return res.status(400).json({ message: 'Bài thi đã kết thúc, không thể ghi nhận thêm log.' });
         }
 
-        const { event_type, description } = req.body;
+        const event_type = req.body.event_type || req.body.type || 'tab_switch';
+        const description = req.body.description || `Phát hiện hành vi ${event_type}`;
+
+        // Kiểm tra chống spam / duplicate violation log trong vòng 2.5 giây
+        if (session.proctoring_logs.length > 0) {
+            const lastLog = session.proctoring_logs[session.proctoring_logs.length - 1];
+            const timeDiff = Date.now() - new Date(lastLog.timestamp).getTime();
+            if (timeDiff < 2500) {
+                return res.status(200).json({ 
+                    message: 'Vi phạm đã được ghi nhận gần đây',
+                    violation_count: session.violation_count,
+                    isLocked: session.status === 'locked' 
+                });
+            }
+        }
         
         session.proctoring_logs.push({ event_type, description, timestamp: Date.now() });
         session.violation_count += 1;

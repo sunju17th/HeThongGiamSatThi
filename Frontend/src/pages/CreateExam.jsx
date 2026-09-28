@@ -61,6 +61,12 @@ const CreateExam = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
+
+        if (new Date(examData.start_time) >= new Date(examData.end_time)) {
+            setError("Thời gian bắt đầu phải nhỏ hơn thời gian kết thúc!");
+            return;
+        }
+
         setLoading(true);
 
         try {
@@ -68,8 +74,13 @@ const CreateExam = () => {
             const questionIds = [];
             for (let q of questions) {
                 // Kiểm tra hợp lệ sơ bộ
-                if (!q.content || q.options.some(opt => opt === '') || !q.correct_answer) {
+                if (!q.content || q.options.some(opt => opt.trim() === '') || !q.correct_answer) {
                     throw new Error("Vui lòng điền đầy đủ nội dung, 4 đáp án và chọn đáp án đúng cho tất cả câu hỏi!");
+                }
+                
+                const trimmedOptions = q.options.map(o => o.trim());
+                if (new Set(trimmedOptions).size < trimmedOptions.length) {
+                    throw new Error("Các đáp án A, B, C, D trong cùng 1 câu hỏi không được trùng nội dung nhau!");
                 }
                 
                 const qRes = await api.post('/questions', q);

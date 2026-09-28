@@ -19,6 +19,61 @@ const TeacherDashboard = () => {
     const [studentsList, setStudentsList] = useState([]);
     const [loadingStudents, setLoadingStudents] = useState(false);
 
+    // State cho Modal Sửa Đề
+    const [editingExam, setEditingExam] = useState(null);
+    const [savingEdit, setSavingEdit] = useState(false);
+
+    const formatForDateTimeInput = (dateStr) => {
+        if (!dateStr) return '';
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return '';
+        const pad = (n) => (n < 10 ? '0' + n : n);
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    };
+
+    const handleOpenEdit = (exam) => {
+        setEditingExam({
+            _id: exam._id,
+            title: exam.title || '',
+            duration_minutes: exam.duration_minutes || 60,
+            start_time: formatForDateTimeInput(exam.start_time),
+            end_time: formatForDateTimeInput(exam.end_time),
+            max_violations: exam.max_violations ?? 3
+        });
+    };
+
+    const handleSaveEditExam = async (e) => {
+        e.preventDefault();
+        if (!editingExam) return;
+
+        if (new Date(editingExam.start_time) >= new Date(editingExam.end_time)) {
+            alert("Lỗi: Thời gian bắt đầu phải nhỏ hơn thời gian kết thúc!");
+            return;
+        }
+
+        setSavingEdit(true);
+        try {
+            const payload = {
+                title: editingExam.title,
+                duration_minutes: Number(editingExam.duration_minutes),
+                start_time: editingExam.start_time,
+                end_time: editingExam.end_time,
+                max_violations: Number(editingExam.max_violations)
+            };
+
+            const response = await api.put(`/exams/${editingExam._id}`, payload);
+            
+            setExams(prev => prev.map(ex => ex._id === editingExam._id ? { ...ex, ...response.data } : ex));
+            alert("Cập nhật kỳ thi thành công!");
+            setEditingExam(null);
+        } catch (error) {
+            console.error("Lỗi khi cập nhật kỳ thi:", error);
+            alert(error.response?.data?.message || "Không thể cập nhật kỳ thi!");
+        } finally {
+            setSavingEdit(false);
+        }
+    };
+
     useEffect(() => {
         const fetchExams = async () => {
             try {
@@ -322,6 +377,15 @@ const TeacherDashboard = () => {
                                         <button 
                                             onClick={(e) => {
                                                 e.stopPropagation();
+                                                handleOpenEdit(exam);
+                                            }}
+                                            style={{ padding: '6px 10px', background: '#fffaf0', color: '#dd6b20', border: '1px solid #fbd38d', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}
+                                        >
+                                            📝 Sửa Đề
+                                        </button>
+                                        <button 
+                                            onClick={(e) => {
+                                                e.stopPropagation();
                                                 handleOpenAssign(exam);
                                             }}
                                             style={{ padding: '6px 10px', background: '#f0fff4', color: '#2f855a', border: '1px solid #c6f6d5', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}
@@ -445,6 +509,94 @@ const TeacherDashboard = () => {
                             )}
 
                             <button onClick={closeAssignModal} style={{ width: '100%', padding: '12px', background: '#edf2f7', color: '#4a5568', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '16px', fontWeight: 'bold', marginTop: '20px' }}>Đóng</button>
+                        </div>
+                    </div>
+                )}
+                {/* Modal Chỉnh Sửa Kỳ Thi */}
+                {editingExam && (
+                    <div style={styles.modalOverlay} onClick={() => setEditingExam(null)}>
+                        <div style={{...styles.modalContent, maxWidth: '550px'}} onClick={e => e.stopPropagation()}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '2px solid #edf2f7', paddingBottom: '15px' }}>
+                                <h3 style={{ margin: 0, fontSize: '20px', color: '#2d3748' }}>✏️ Chỉnh sửa kỳ thi</h3>
+                                <button onClick={() => setEditingExam(null)} style={{ background: 'none', border: 'none', fontSize: '28px', cursor: 'pointer', color: '#a0aec0' }}>&times;</button>
+                            </div>
+
+                            <form onSubmit={handleSaveEditExam}>
+                                <div style={{ marginBottom: '15px' }}>
+                                    <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', color: '#4a5568' }}>Tên bài thi / Tiêu đề:</label>
+                                    <input 
+                                        type="text" 
+                                        value={editingExam.title} 
+                                        onChange={e => setEditingExam({ ...editingExam, title: e.target.value })}
+                                        required
+                                        style={{ width: '100%', padding: '10px 12px', border: '1px solid #cbd5e0', borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box' }}
+                                    />
+                                </div>
+
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
+                                    <div>
+                                        <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', color: '#4a5568' }}>Thời lượng (phút):</label>
+                                        <input 
+                                            type="number" 
+                                            min="1"
+                                            value={editingExam.duration_minutes} 
+                                            onChange={e => setEditingExam({ ...editingExam, duration_minutes: e.target.value })}
+                                            required
+                                            style={{ width: '100%', padding: '10px 12px', border: '1px solid #cbd5e0', borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box' }}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', color: '#4a5568' }}>Vi phạm tối đa (lần):</label>
+                                        <input 
+                                            type="number" 
+                                            min="1"
+                                            value={editingExam.max_violations} 
+                                            onChange={e => setEditingExam({ ...editingExam, max_violations: e.target.value })}
+                                            required
+                                            style={{ width: '100%', padding: '10px 12px', border: '1px solid #cbd5e0', borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box' }}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div style={{ marginBottom: '15px' }}>
+                                    <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', color: '#4a5568' }}>Thời gian mở ca thi (Start time):</label>
+                                    <input 
+                                        type="datetime-local" 
+                                        value={editingExam.start_time} 
+                                        onChange={e => setEditingExam({ ...editingExam, start_time: e.target.value })}
+                                        required
+                                        style={{ width: '100%', padding: '10px 12px', border: '1px solid #cbd5e0', borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box' }}
+                                    />
+                                </div>
+
+                                <div style={{ marginBottom: '20px' }}>
+                                    <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', color: '#4a5568' }}>Thời gian đóng ca thi (End time):</label>
+                                    <input 
+                                        type="datetime-local" 
+                                        value={editingExam.end_time} 
+                                        onChange={e => setEditingExam({ ...editingExam, end_time: e.target.value })}
+                                        required
+                                        style={{ width: '100%', padding: '10px 12px', border: '1px solid #cbd5e0', borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box' }}
+                                    />
+                                </div>
+
+                                <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setEditingExam(null)} 
+                                        style={{ flex: 1, padding: '12px', background: '#edf2f7', color: '#4a5568', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '15px', fontWeight: 'bold' }}
+                                    >
+                                        Hủy
+                                    </button>
+                                    <button 
+                                        type="submit" 
+                                        disabled={savingEdit}
+                                        style={{ flex: 1, padding: '12px', background: '#4c51bf', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '15px', fontWeight: 'bold' }}
+                                    >
+                                        {savingEdit ? 'Đang lưu...' : 'Lưu Thay Đổi'}
+                                    </button>
+                                </div>
+                            </form>
                         </div>
                     </div>
                 )}

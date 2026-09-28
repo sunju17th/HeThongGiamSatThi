@@ -22,7 +22,9 @@ const LoginPage = () => {
 
         if (result.success) {
             // Chuyển hướng dựa trên vai trò (Role)
-            if (result.role === 'teacher' || result.role === 'admin') {
+            if (result.role === 'admin') {
+                navigate('/admin');
+            } else if (result.role === 'teacher') {
                 navigate('/teacher');
             } else {
                 navigate('/student');

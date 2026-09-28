@@ -4,14 +4,33 @@ import { useAuth } from '../context/AuthContext';
 
 const HomePage = () => {
     const navigate = useNavigate();
-    const { user } = useAuth();
+    const { user, loading } = useAuth();
+
+    useEffect(() => {
+        if (!loading) {
+            if (!user) {
+                // Tự động chuyển hướng ngay tới trang Đăng Nhập khi truy cập trang chủ mà chưa đăng nhập
+                navigate('/login', { replace: true });
+            } else {
+                // Nếu đã đăng nhập -> chuyển thẳng tới Dashboard theo Role chuẩn
+                if (user.role === 'admin') {
+                    navigate('/admin', { replace: true });
+                } else if (user.role === 'teacher') {
+                    navigate('/teacher', { replace: true });
+                } else {
+                    navigate('/student', { replace: true });
+                }
+            }
+        }
+    }, [user, loading, navigate]);
 
     const handleGetStarted = () => {
         if (!user) {
             navigate('/login');
         } else {
-            // Đã đăng nhập thì cho vào thẳng Dashboard tương ứng
-            if (user.role === 'teacher' || user.role === 'admin') {
+            if (user.role === 'admin') {
+                navigate('/admin');
+            } else if (user.role === 'teacher') {
                 navigate('/teacher');
             } else {
                 navigate('/student');
