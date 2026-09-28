@@ -22,7 +22,10 @@ export const getSessions = async (req, res) => {
 export const getSessionById = async (req, res) => {
     try {
         const session = await ExamSession.findById(req.params.id)
-            .populate('exam_id')  
+            .populate({
+                path: 'exam_id',
+                populate: { path: 'questions' }
+            })  
             .populate('student_id', 'full_name username role');  
         
         if (!session) return res.status(404).json({ message: 'Phiên thi không tồn tại' });

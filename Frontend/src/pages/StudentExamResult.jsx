@@ -14,13 +14,16 @@ const StudentExamResult = () => {
     useEffect(() => {
         const fetchResult = async () => {
             try {
-                // 1. Lấy thông tin session (chứa điểm số, danh sách câu trả lời)
+                // 1. Lấy thông tin session (chứa điểm số, danh sách câu trả lời và đề thi cùng câu hỏi đã populate)
                 const sessionRes = await api.get(`/sessions/${sessionId}`);
-                setSession(sessionRes.data);
+                const sessionData = sessionRes.data;
+                setSession(sessionData);
 
-                // 2. Lấy thông tin chi tiết đề thi để lấy nội dung câu hỏi
-                if (sessionRes.data?.exam_id?._id) {
-                    const examRes = await api.get(`/exams/${sessionRes.data.exam_id._id}`);
+                // 2. Ưu tiên lấy câu hỏi trực tiếp từ sessionData.exam_id (đã bao gồm correct_answer của kỳ thi đã nộp)
+                if (sessionData?.exam_id?.questions) {
+                    setExamDetails(sessionData.exam_id);
+                } else if (sessionData?.exam_id?._id) {
+                    const examRes = await api.get(`/exams/${sessionData.exam_id._id}`);
                     setExamDetails(examRes.data);
                 }
 
@@ -123,9 +126,13 @@ const StudentExamResult = () => {
                         <h3 style={{ color: '#2d3748', marginBottom: '20px' }}>Chi tiết bài làm</h3>
                         {examDetails.questions.map((q, index) => {
                             // Tìm câu trả lời của sinh viên cho câu hỏi này
-                            const studentAns = session.answers?.find(a => a.question_id === q._id);
+                            const studentAns = session.answers?.find(a => 
+                                a.question_id?.toString() === q._id?.toString() || a.question_id === q._id
+                            );
                             const isCorrect = studentAns?.is_correct;
                             const isUnanswered = !studentAns;
+
+                            let studentChoiceMatched = false;
 
                             return (
                                 <div key={q._id} style={{ ...styles.answerCard, borderLeftColor: isUnanswered ? '#cbd5e0' : (isCorrect ? '#48bb78' : '#f56565') }}>
@@ -138,7 +145,11 @@ const StudentExamResult = () => {
                                     
                                     <div style={styles.optionsList}>
                                         {q.options.map((opt, i) => {
-                                            const isStudentChoice = studentAns?.selected_option === opt;
+                                            let isStudentChoice = false;
+                                            if (!studentChoiceMatched && studentAns?.selected_option !== undefined && studentAns?.selected_option === opt) {
+                                                isStudentChoice = true;
+                                                studentChoiceMatched = true;
+                                            }
                                             const isActuallyCorrect = q.correct_answer === opt;
                                             
                                             let bg = 'white';
